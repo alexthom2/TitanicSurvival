@@ -1,0 +1,167 @@
+---
+title: "Titantic Survival"
+author: "Alex Thom"
+date: "03/12/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(tidyverse)
+library(caret)
+setwd("C:/Users/alext/Documents/TitanicSurvival/TitanicSurvival")
+
+library(ProjectTemplate)
+
+load.project()
+
+```
+
+
+```{r}
+
+
+train2 <- train %>% select(Survived, Pclass, Sex, Embarked)
+
+
+
+````
+
+## Introduction
+
+The Titanic was a major catastrophe in 1912 with an estimated 832 passengers and 685 crew members perishing in the disaster. This review of machine learning techniques looks at the best methodologies for predicitng whether a passenger would have survied or died. In order to accomplish this task there is a dataset provided below:
+
+```{r}
+
+str(train)
+
+
+```
+
+The variable that will be predicted is the Survived variable. Although it is currently an integer, it is really a factor as 0 is died and 1 is survied. This will effect the type of model that is used as the target variable being a facotr means this is a classification problem. The missing data is summarised below 
+
+
+```{r}
+
+sapply(train, function(x) {sum(is.na(x))})
+
+```
+
+In the training set it looks like there is a lot of missing data for the age variable. This could be something that could be improved on in feature engineering part of this project. Also cabine has a lot of missing data which might be harder to develope into a variabel. 
+
+
+
+```{r}
+
+library(scales)
+
+vis1 <- train %>% group_by(Sex) %>%
+                    summarise(tot = sum(Survived), n = n()) %>%
+                      mutate(per = tot/n)
+
+
+cols <- c("female" = "#ffae00", "male" = "#8400ff")
+
+ggplot(vis1, aes(x = Sex, y = per, fill = Sex)) + 
+                                          geom_col() +
+                                            scale_y_continuous(labels = percent_format()) +
+                                              scale_fill_manual(values = cols) +
+                                                labs(x = "", y = "Percent Survived", title = "Comparison of Male and Female Survival Rates") +
+                                                          guides(fill = F) +
+                                                    theme(panel.background = element_blank())
+
+
+````
+
+Its clear that females had a significant higher chance of survivl and therefore the Sex variable will have signifancat influneces in the models predictions. 
+
+
+```{r}
+
+ggplot(train, aes(x = Age, group = Survived, fill = as.factor(Survived))) + geom_density(alpha = 0.5)
+
+
+
+
+```
+
+COmparing how ages effects survival the major feature visible is at the younger ages. Above 10 years old the rates of survival are pretty similar. Howerver, less then 10 years old it looks like there are significantly more likelly to be able to survive. This variable has some missing data however it looks like it has interesting features so will have to create a method in order to geat more details from this feature. 
+
+```{r}
+
+mround <- function(x,base){
+        base*round(x/base)
+}
+
+
+vis2 <- train %>% mutate(rFare = mround(Fare, 5)) %>%
+                    group_by(rFare, Survived) %>%
+                        summarise(n = n())
+
+ggplot(vis2, aes(x = rFare, y = n, fill = as.factor(Survived))) + geom_col()
+
+```
+
+The lower fares are dominated by people who didnt survive the catastophe. This will be another feature that will have a storng preidctive power. 
+
+## Methods
+
+
+
+
+```{r}
+
+
+rf <- train(as.factor(Survived)~., data = train2,  method = "rf", trControl = trainControl(method = "cv"))
+
+```
+
+
+
+```{r}
+
+rf_pred <- predict(rf, testdata)
+
+
+confusionMatrix(rf_pred, as.factor(testdata$Survived))
+
+
+
+
+````
+
+
+
+
+```{r}
+
+
+svm <- train(as.factor(Survived)~., data = train2,  method = "svmLinear", trControl = trainControl(method = "cv"))
+
+```
+
+
+
+
+```{r}
+
+svm_pred <- predict(svm, testdata)
+
+
+confusionMatrix(svm_pred, as.factor(testdata$Survived))
+
+
+```
+
+
+
+```{r}
+
+
+svm <- train(as.factor(Survived)~., data = train2,  method = "svmLinear", trControl = trainControl(method = "cv"))
+
+
+
+```
