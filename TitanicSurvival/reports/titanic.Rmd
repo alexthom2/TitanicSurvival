@@ -108,15 +108,141 @@ The lower fares are dominated by people who didnt survive the catastophe. This w
 
 ## Methods
 
+I am going to develope 3 models and compare them and there performance for this specific task. The 3 models will be random forest classifier, support vector machine and a logistic regression. In the litreature a random forest model has been cited in over 900 articles on this subject compared to around 5000 for support vector machine and only 100 for logistic regression. This gives some insight into likely success othe model. Before i get ot that I need to do some feautre engineering particluarly on the age column. Can i come up with reasonble way to impute this data?
+
+###Feature Engineering
+
+Age 
+
+In order tofill in the missing age data I am going to create a model which can predict the age. This will be a simple linear model. Looking at the passengers name variable I think if the title is master or miss that will signify what age the passenger is. Therefore I will extract the the title and use all the other available columns to estimate the age of a passneger
+
+```{r}
+
+train$Title <- gsub('(.*, )|(\\..*)', '', train$Name)
+
+rare_title <- c('Dona', 'Lady', 'the Countess','Capt', 'Col', 'Don', 
+                'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer')
+
+train$Title[train$Title == 'Mlle']        <- 'Miss' 
+train$Title[train$Title == 'Ms']          <- 'Miss'
+train$Title[train$Title == 'Mme']         <- 'Mrs' 
+train$Title[train$Title %in% rare_title]  <- 'Rare Title'
+
+agetrain <- train %>% filter(!is.na(Age))
+
+smp_size <- floor(0.75 * nrow(agetrain))
+
+
+train_s <- sample(seq_len(nrow(agetrain)), size = smp_size)
+
+train_age <- agetrain[train_s, ]
+test_age <- agetrain[-train_s, ]
+
+agelm <- lm(Age ~ Title + Fare+ Pclass + SibSp + Embarked, train_age )
+
+agetrain2 <- test_age %>% mutate(pred_age = predict(agelm, test_age))
+
+
+ggplot(agetrain2, aes(y = pred_age, x = Age)) + geom_point()
+
+
+```
+
+The summary of actual age against predicted age seems to do ok around the median age. However at either extremes there seems to be some innacuracies. This could be due to the modeling method decided and the limited data meaning the model doesnt feneralize well to the extremes. I will use this to impute the missing values however iw ill train two models and compare if it actually benefits it. 
+
+
+Also the title variable now it has been created I will use that in the model i create
+
+```{r}
+
+
+train$Title <- gsub('(.*, )|(\\..*)', '', train$Name)
+
+rare_title <- c('Dona', 'Lady', 'the Countess','Capt', 'Col', 'Don', 
+                'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer')
+
+train$Title[train$Title == 'Mlle']        <- 'Miss' 
+train$Title[train$Title == 'Ms']          <- 'Miss'
+train$Title[train$Title == 'Mme']         <- 'Mrs' 
+train$Title[train$Title %in% rare_title]  <- 'Rare Title'
+
+train_v2 <- train %>% mutate(age2 = if_else(is.na(Age), predict(agelm, train), Age)) %>%
+                          select(Survived,  Pclass, Sex, Embarked, age2, Title, Fare)
+                     
+
+
+```
+
+###Random Forest
+
+
+A random forest is a learning method that builds on the decision tree format. Anumber of random decision trees are are pruduced and the preduction is based on the average of all the decision trees. 
+
+tuning parameters
+
+mtry - the number of variables randomly sampled for each split 
+ntress - which is the number of trees 
+
+```{r}
+
+metric <- "Accuracy"
+
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="random")
+
+tunegrid <- expand.grid(mtry=c(1:15), ntree=c(1, 10, 100, 1000))
+
+mtry <- sqrt(ncol(train_v2))
+
+
+rf_random <- train(as.factor(Survived)~., data=train_v2, method="rf", tuneLength=15, trControl=control)
+print(rf_random)
+plot(rf_random)
+
+
+
+```
+
+Highest accurarcy for mtry is 5 so that is what i will be selecting for the final model. 
+
+
+
+### Support Vector Machines
+
+The second model which i will look at is the support vector machines. It is a non probalistic binary classifier. It learns from the training set the attributes that cause a particular result and then assigns new data to one category or the other based on that. 
+
+
+
+It has two tuning paremters:
+
+c
+
+sigma 
+
+
+
 
 
 
 ```{r}
 
+tune_grid_sv <- expand.grid(
+ C = c(0.05,
+ 0.1,0.15,0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5))
 
-rf <- train(as.factor(Survived)~., data = train2,  method = "rf", trControl = trainControl(method = "cv"))
+
+ svm_test <- train(as.factor(Survived) ~., data = train_v2, method = "svmLinear",
+                    trControl=control,
+                    preProcess = c("center", "scale"),
+                    tuneGrid = tune_grid_sv,
+                    tuneLength = 10)
+
+ 
+ svm_test
+
 
 ```
+
+##Results
 
 
 
@@ -138,7 +264,7 @@ confusionMatrix(rf_pred, as.factor(testdata$Survived))
 ```{r}
 
 
-svm <- train(as.factor(Survived)~., data = train2,  method = "svmLinear", trControl = trainControl(method = "cv"))
+svm <- train(as.factor(Survived)~., data = train_v2,  method = "svmLinear", trControl = trainControl(method = "cv"))
 
 ```
 
