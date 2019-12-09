@@ -19,16 +19,6 @@ load.project()
 
 ```
 
-
-```{r}
-
-
-train2 <- train %>% select(Survived, Pclass, Sex, Embarked)
-
-
-
-````
-
 ## Introduction
 
 The Titanic was a major catastrophe in 1912 with an estimated 832 passengers and 685 crew members perishing in the disaster. This review of machine learning techniques looks at the best methodologies for predicitng whether a passenger would have survied or died. In order to accomplish this task there is a dataset provided below:
@@ -43,7 +33,7 @@ str(train)
 The variable that will be predicted is the Survived variable. Although it is currently an integer, it is really a factor as 0 is died and 1 is survied. This will effect the type of model that is used as the target variable being a facotr means this is a classification problem. The missing data is summarised below 
 
 
-```{r}
+```{r echo=FALSE}
 
 sapply(train, function(x) {sum(is.na(x))})
 
@@ -53,7 +43,7 @@ In the training set it looks like there is a lot of missing data for the age var
 
 
 
-```{r}
+```{r include=FALSE}
 
 library(scales)
 
@@ -63,6 +53,13 @@ vis1 <- train %>% group_by(Sex) %>%
 
 
 cols <- c("female" = "#ffae00", "male" = "#8400ff")
+
+
+```
+
+
+
+```{r fig.width=4, fig.height=3, echo = FALSE}
 
 ggplot(vis1, aes(x = Sex, y = per, fill = Sex)) + 
                                           geom_col() +
@@ -78,7 +75,7 @@ ggplot(vis1, aes(x = Sex, y = per, fill = Sex)) +
 Its clear that females had a significant higher chance of survivl and therefore the Sex variable will have signifancat influneces in the models predictions. 
 
 
-```{r}
+```{r echo=FALSE, fig.width=4, fig.height=3}
 
 ggplot(train, aes(x = Age, group = Survived, fill = as.factor(Survived))) + geom_density(alpha = 0.5)
 
@@ -89,7 +86,7 @@ ggplot(train, aes(x = Age, group = Survived, fill = as.factor(Survived))) + geom
 
 COmparing how ages effects survival the major feature visible is at the younger ages. Above 10 years old the rates of survival are pretty similar. Howerver, less then 10 years old it looks like there are significantly more likelly to be able to survive. This variable has some missing data however it looks like it has interesting features so will have to create a method in order to geat more details from this feature. 
 
-```{r}
+```{r echo=FALSE}
 
 mround <- function(x,base){
         base*round(x/base)
@@ -99,6 +96,10 @@ mround <- function(x,base){
 vis2 <- train %>% mutate(rFare = mround(Fare, 5)) %>%
                     group_by(rFare, Survived) %>%
                         summarise(n = n())
+
+````
+
+```{r, fig.width=4, fig.height=3, echO = FALSE}
 
 ggplot(vis2, aes(x = rFare, y = n, fill = as.factor(Survived))) + geom_col()
 
@@ -116,9 +117,9 @@ Age
 
 In order tofill in the missing age data I am going to create a model which can predict the age. This will be a simple linear model. Looking at the passengers name variable I think if the title is master or miss that will signify what age the passenger is. Therefore I will extract the the title and use all the other available columns to estimate the age of a passneger
 
-```{r}
+```{r echo=FALSE}
 
-train$Title <- gsub('(.*, )|(\\..*)', '', train$Name)
+train$Title <- gsub( '(.*, )|(\\..*)', '', train$Name)
 
 rare_title <- c('Dona', 'Lady', 'the Countess','Capt', 'Col', 'Don', 
                 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer')
@@ -153,7 +154,7 @@ The summary of actual age against predicted age seems to do ok around the median
 
 Also the title variable now it has been created I will use that in the model i create
 
-```{r}
+```{r echo=FALSE}
 
 
 train$Title <- gsub('(.*, )|(\\..*)', '', train$Name)
@@ -183,11 +184,11 @@ tuning parameters
 mtry - the number of variables randomly sampled for each split 
 ntress - which is the number of trees 
 
-```{r}
+```{r echo=FALSE}
 
 metric <- "Accuracy"
 
-control <- trainControl(method="repeatedcv", number=10, repeats=3, search="random")
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
 
 tunegrid <- expand.grid(mtry=c(1:15), ntree=c(1, 10, 100, 1000))
 
@@ -223,7 +224,7 @@ sigma
 
 
 
-```{r}
+```{r include=FALSE}
 
 tune_grid_sv <- expand.grid(
  C = c(0.05,
@@ -242,52 +243,66 @@ tune_grid_sv <- expand.grid(
 
 ```
 
+
+###logistic regression
+
+Logisitic regression gives the probability of a certain event occuring. The data is trained on events and gives a probability of the classification based on the variables. 
+
+
+
+```{r include=FALSE}
+
+lr_test <- train(as.factor(Survived) ~., data = train_v2, method = "glm",
+                    trControl=control)
+
+
+lr_test
+
+```
+
+
+
 ##Results
 
 
 
-```{r}
+```{r include=FALSE}
 
-rf_pred <- predict(rf, testdata)
+rf_mod <- train(as.factor(Survived)~., data=train_v2, method="rf", tuneLength=15, trControl=control)
+
+svm_mod <- train(as.factor(Survived)~., data=train_v2, method="svmLinear" , trControl=control)
+
+lr_test <- train(as.factor(Survived) ~., data = train_v2, method = "glm",
+                    trControl=control)
+
+```
 
 
-confusionMatrix(rf_pred, as.factor(testdata$Survived))
+
+```{r include=FALSE}
+testdata$Title <- gsub('(.*, )|(\\..*)', '', testdata$Name)
+
+rare_title <- c('Dona', 'Lady', 'the Countess','Capt', 'Col', 'Don', 
+                'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer')
+
+testdata$Title[testdata$Title == 'Mlle']        <- 'Miss' 
+testdata$Title[testdata$Title == 'Ms']          <- 'Miss'
+testdata$Title[testdata$Title == 'Mme']         <- 'Mrs' 
+testdata$Title[testdata$Title %in% rare_title]  <- 'Rare Title'
+
+test_v2 <- testdata %>% mutate(age2 = if_else(is.na(Age), predict(agelm, testdata), Age)) %>%
+                  mutate(Fare = if_else(is.na(Fare), median(Fare, na.rm = T), Fare)) %>%
+                          select(Survived,  Pclass, Sex, Embarked, age2, Title, Fare)
 
 
 
+rf_pred <- predict(rf_mod, test_v2)
+svm_pred <-  predict(svm_mod, test_v2)
+lgr_pred <-  predict(lr_test, test_v2)
+
+confusionMatrix(rf_pred, as.factor(test_v2$Survived))
+confusionMatrix(svm_pred, as.factor(test_v2$Survived))
+confusionMatrix(lgr_pred, as.factor(test_v2$Survived))
 
 ````
 
-
-
-
-```{r}
-
-
-svm <- train(as.factor(Survived)~., data = train_v2,  method = "svmLinear", trControl = trainControl(method = "cv"))
-
-```
-
-
-
-
-```{r}
-
-svm_pred <- predict(svm, testdata)
-
-
-confusionMatrix(svm_pred, as.factor(testdata$Survived))
-
-
-```
-
-
-
-```{r}
-
-
-svm <- train(as.factor(Survived)~., data = train2,  method = "svmLinear", trControl = trainControl(method = "cv"))
-
-
-
-```
